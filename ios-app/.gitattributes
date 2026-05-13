@@ -1,0 +1,1 @@
+ios-app/Vendor/libndi_ios.a filter=lfs diff=lfs merge=lfs -text
