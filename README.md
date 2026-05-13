@@ -1,6 +1,6 @@
-# meta-video-stream
+# Meta Glasses to Teams Video Stream (NDI-over-USB)
 
-Streams live video from Meta Ray-Ban AI glasses into Microsoft Teams meetings via a virtual camera.
+Streams live video from Meta Ray-Ban AI glasses into Microsoft Teams meetings with ultra-low latency using NDI over a USB-tethered connection.
 
 ## Architecture
 
