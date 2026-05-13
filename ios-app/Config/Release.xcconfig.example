@@ -1,0 +1,7 @@
+// Release.xcconfig
+// Copy this file to Release.xcconfig (gitignored) and fill in real values.
+
+DEVELOPMENT_TEAM = XXXXXXXXXX
+META_APP_ID = REPLACE_WITH_YOUR_META_APP_ID
+CLIENT_TOKEN = REPLACE_WITH_YOUR_CLIENT_TOKEN
+APP_LINK_SCHEME = metavideostream

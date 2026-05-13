@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "4689FD17-3D43-483E-B254-4765F643C0BA",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:MetaVideoStream.xcodeproj",
+      "identifier" : "D3C4681C11A1026D8CDE2DC9",
+      "name" : "MetaVideoStream"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:MetaVideoStream.xcodeproj",
+        "identifier" : "7A30564A51FC4B571A118DB4",
+        "name" : "MetaVideoStreamTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -1,0 +1,107 @@
+name: MetaVideoStream
+
+options:
+  bundleIdPrefix: com.timmyBirds
+  deploymentTarget:
+    iOS: "15.2"
+  createIntermediateGroups: true
+  xcodeVersion: "14.0"
+
+# Xcconfig files hold the secrets (gitignored). Copy from *.example to create.
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+
+# Project-level settings ensure DEVELOPMENT_TEAM survives xcconfig inheritance.
+settings:
+  base:
+    DEVELOPMENT_TEAM: B5WNGX3893
+    CODE_SIGN_STYLE: Automatic
+
+schemes:
+  MetaVideoStream:
+    build:
+      targets:
+        MetaVideoStream: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MetaVideoStreamTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+packages:
+  MetaWearablesDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    from: "0.6.0"
+  HaishinKit:
+    url: https://github.com/shogo4405/HaishinKit.swift
+    from: "1.9.0"
+
+targets:
+
+  MetaVideoStream:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/MetaVideoStream
+        excludes:
+          - "**/*.example"
+    signing:
+      team: B5WNGX3893
+      style: automatic
+      entitlements:
+        path: Sources/MetaVideoStream/Resources/MetaVideoStream.entitlements
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.timmyBirds.MetaVideoStream
+        INFOPLIST_FILE: Sources/MetaVideoStream/Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        # NDI Integration
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/MetaVideoStream/MetaVideoStream-Bridging-Header.h
+        LIBRARY_SEARCH_PATHS: $(inherited) $(PROJECT_DIR)/Vendor
+        HEADER_SEARCH_PATHS: $(inherited) $(PROJECT_DIR)/Vendor/include
+        # Silence the Xcode 15 "macro" sandbox warnings for SPM
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    dependencies:
+      - sdk: libc++.tbd
+      - framework: Vendor/libndi_ios.a
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
+      - package: HaishinKit
+        product: HaishinKit
+      - package: HaishinKit
+        product: SRTHaishinKit
+
+  MetaVideoStreamTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/MetaVideoStreamTests
+    signing:
+      team: B5WNGX3893
+      style: automatic
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.timmyBirds.MetaVideoStreamTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/MetaVideoStream.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MetaVideoStream
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: MetaVideoStream
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
+      - package: MetaWearablesDAT
+        product: MWDATMockDevice

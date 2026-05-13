@@ -1,0 +1,16 @@
+// Debug.xcconfig
+// Copy this file to Debug.xcconfig (gitignored) and fill in real values.
+// Values come from: https://wearables.developer.meta.com → your project → App configuration
+
+// Your Apple Developer Team ID (find via: security find-identity -v -p codesigning)
+DEVELOPMENT_TEAM = XXXXXXXXXX
+
+// From Wearables Developer Center → your project → App configuration → iOS integration
+META_APP_ID = REPLACE_WITH_YOUR_META_APP_ID
+CLIENT_TOKEN = REPLACE_WITH_YOUR_CLIENT_TOKEN
+
+// Universal link you registered with Meta (the URL you entered in the portal)
+APP_LINK_URL = https://github.com/YOUR_USERNAME/YOUR_REPO
+
+// Custom URL scheme for future deep-link use
+APP_LINK_SCHEME = metavideostream

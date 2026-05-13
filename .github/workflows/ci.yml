@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-ios:
+    name: Build & test iOS app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Write stub xcconfig files (CI — no real credentials needed for build)
+        working-directory: ios-app
+        run: |
+          cp Config/Debug.xcconfig.example   Config/Debug.xcconfig
+          cp Config/Release.xcconfig.example Config/Release.xcconfig
+          # Replace placeholders with dummy values that satisfy the build
+          sed -i '' 's/REPLACE_WITH_YOUR_META_APP_ID/CI_PLACEHOLDER/' Config/Debug.xcconfig
+          sed -i '' 's/REPLACE_WITH_YOUR_CLIENT_TOKEN/CI_PLACEHOLDER/'  Config/Debug.xcconfig
+          sed -i '' 's/XXXXXXXXXX/FAKETEAMID/'                           Config/Debug.xcconfig
+          sed -i '' 's/REPLACE_WITH_YOUR_META_APP_ID/CI_PLACEHOLDER/' Config/Release.xcconfig
+          sed -i '' 's/REPLACE_WITH_YOUR_CLIENT_TOKEN/CI_PLACEHOLDER/'  Config/Release.xcconfig
+          sed -i '' 's/XXXXXXXXXX/FAKETEAMID/'                           Config/Release.xcconfig
+
+      - name: Generate Xcode project
+        working-directory: ios-app
+        run: xcodegen generate --spec project.yml
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild \
+            -project ios-app/MetaVideoStream.xcodeproj \
+            -scheme MetaVideoStream \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Run MockCaptureTests
+        run: |
+          xcodebuild test \
+            -project ios-app/MetaVideoStream.xcodeproj \
+            -scheme MetaVideoStreamTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            -resultBundlePath TestResults.xcresult
+
+  build-macos:
+    name: Build macOS companion (stub)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app
+
+      - name: Skip — companion not yet scaffolded
+        run: echo "macOS companion build will be added in Phase 4."

@@ -1,0 +1,64 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcworkspace/contents.xcworkspacedata
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+build/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# Swift Package Manager
+.build/
+.swiftpm/
+*.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.AppleDouble
+
+# Secrets / env
+*.env
+.env
+*.env.local
+secrets.xcconfig
+GoogleService-Info.plist
+
+# xcconfig secrets (copy from *.example to create)
+ios-app/Config/Debug.xcconfig
+ios-app/Config/Release.xcconfig
+
+# xcodegen-generated project (regenerate with generate.sh)
+ios-app/MetaVideoStream.xcodeproj/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Generated
+*.generated.swift
