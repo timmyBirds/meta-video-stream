@@ -39,7 +39,7 @@ schemes:
 packages:
   MetaWearablesDAT:
     url: https://github.com/facebook/meta-wearables-dat-ios
-    from: "0.6.0"
+    from: "0.7.0"
   HaishinKit:
     url: https://github.com/shogo4405/HaishinKit.swift
     from: "1.9.0"

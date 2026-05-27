@@ -38,7 +38,7 @@ final class WearablesManager: ObservableObject {
 
     // ── Private SDK objects ────────────────────────────────────────────────────
     private var deviceSession: DeviceSession?
-    private var streamSession: StreamSession?
+    private var streamSession: MWDATCamera.Stream?
 
     private var stateToken: (any AnyListenerToken)?
     private var frameToken: (any AnyListenerToken)?
@@ -203,7 +203,7 @@ final class WearablesManager: ObservableObject {
                 if sessionState == .stopped { throw WearablesError.sessionFailed }
             }
 
-            let config = StreamSessionConfig(videoCodec: .raw, resolution: .low, frameRate: 30)
+            let config = StreamConfiguration(videoCodec: .raw, resolution: .low, frameRate: 30)
             guard let stream = try? session.addStream(config: config) else {
                 throw WearablesError.streamCreationFailed
             }
@@ -269,7 +269,7 @@ final class WearablesManager: ObservableObject {
 
     // MARK: - SDK stream state
 
-    private func handleSDKStreamState(_ state: StreamSessionState) {
+    private func handleSDKStreamState(_ state: StreamState) {
         switch state {
         case .stopped: currentFrame = nil
         default: break

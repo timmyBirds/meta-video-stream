@@ -76,7 +76,7 @@ final class MockCaptureTests: XCTestCase {
         XCTAssertTrue(sessionStarted, "Device session did not reach .started")
 
         // Add stream
-        let config = StreamSessionConfig(videoCodec: .raw, resolution: .low, frameRate: 24)
+        let config = StreamConfiguration(videoCodec: .raw, resolution: .low, frameRate: 24)
         guard let stream = try? session.addStream(config: config) else {
             XCTFail("Could not create stream"); return
         }
