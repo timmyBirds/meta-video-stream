@@ -47,6 +47,8 @@
 		<string>$(META_APP_ID)</string>
 		<key>TeamID</key>
 		<string>$(DEVELOPMENT_TEAM)</string>
+		<key>DAMEnabled</key>
+		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Meta Video Stream needs Bluetooth to connect to your Meta AI glasses.</string>

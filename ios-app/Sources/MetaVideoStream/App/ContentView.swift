@@ -8,6 +8,8 @@ struct ContentView: View {
     /// Tracks whether the user dismissed the battery-critical alert with "Keep Going".
     /// Resets when the stream ends and batteryWarning drops back to .none.
     @State private var batteryAlertDismissed = false
+    @State private var isPlayingVideoOnGlasses = false
+    @State private var videoError: String? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -81,6 +83,14 @@ struct ContentView: View {
         // Reset "Keep Going" flag when the stream ends and battery warning clears.
         .onChange(of: wearables.batteryWarning) { newValue in
             if newValue == .none { batteryAlertDismissed = false }
+        }
+        .onChange(of: wearables.appState) { newValue in
+            if case .streaming = newValue {
+                // Keep state
+            } else {
+                isPlayingVideoOnGlasses = false
+                videoError = nil
+            }
         }
     }
 
@@ -213,6 +223,44 @@ struct ContentView: View {
 
             // ── Main action button(s) ──────────────────────────────────────
             actionButton
+
+            // ── Watch Video on Glasses Button ──────────────────────────────
+            if case .streaming = wearables.appState {
+                VStack(spacing: 8) {
+                    Button {
+                        Task {
+                            do {
+                                videoError = nil
+                                isPlayingVideoOnGlasses = true
+                                try await wearables.playVideoOnGlasses(
+                                    url: "https://github.com/facebook/meta-wearables-dat-android/raw/refs/heads/assets/video_266x150_faststart.mp4"
+                                )
+                            } catch {
+                                videoError = error.localizedDescription
+                                isPlayingVideoOnGlasses = false
+                            }
+                        }
+                    } label: {
+                        Label(
+                            isPlayingVideoOnGlasses ? "Video Streaming to Glasses" : "Watch Video on Glasses Screen",
+                            systemImage: "play.tv"
+                        )
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.green)
+                    .disabled(isPlayingVideoOnGlasses)
+
+                    if let error = videoError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .padding(.top, 8)
+            }
         }
     }
 

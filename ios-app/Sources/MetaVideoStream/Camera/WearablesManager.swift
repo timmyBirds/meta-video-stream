@@ -4,6 +4,7 @@ import SwiftUI
 import Combine
 import MWDATCore
 import MWDATCamera
+import MWDATDisplay
 
 // MARK: - WearablesManager
 
@@ -39,9 +40,11 @@ final class WearablesManager: ObservableObject {
     // ── Private SDK objects ────────────────────────────────────────────────────
     private var deviceSession: DeviceSession?
     private var streamSession: MWDATCamera.Stream?
+    private var display: MWDATDisplay.Display?
 
     private var stateToken: (any AnyListenerToken)?
     private var frameToken: (any AnyListenerToken)?
+    private var displayStateToken: (any AnyListenerToken)?
 
     // NDI stream manager — ContentView must not read this directly.
     let ndi: NDIStreamManager
@@ -146,6 +149,19 @@ final class WearablesManager: ObservableObject {
         await disconnect()
     }
 
+    /// Pushes a video player layout to the glasses' display.
+    func playVideoOnGlasses(url: String) async throws {
+        guard let display = display else {
+            throw NSError(
+                domain: "WearablesManager",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Display capability is not active or not supported on this device."]
+            )
+        }
+        let videoPlayer = VideoPlayer(provider: .uri(url), codec: .mp4)
+        try await display.send(videoPlayer)
+    }
+
     // MARK: - Registration
 
     private func registerThenStream() async {
@@ -243,6 +259,16 @@ final class WearablesManager: ObservableObject {
             await stream.start()
             ndi.start()
             startFrameStallMonitor()
+
+            // Start Display capability if supported
+            do {
+                let displayCap = try session.addDisplay()
+                await displayCap.start()
+                self.display = displayCap
+                print("📺 [Wearables] Display capability started successfully.")
+            } catch {
+                print("⚠️ [Wearables] Display capability not available: \(error.localizedDescription)")
+            }
 
         } catch {
             appState = .error(error.localizedDescription)
@@ -394,10 +420,13 @@ final class WearablesManager: ObservableObject {
         frameStallTask = nil
 
         if let stream = streamSession { await stream.stop() }
+        if let displayCap = display { await displayCap.stop() }
         if let session = deviceSession { session.stop() }
         stateToken = nil
         frameToken = nil
+        displayStateToken = nil
         streamSession = nil
+        display = nil
         deviceSession = nil
         currentFrame = nil
         lastFrameDate = nil
