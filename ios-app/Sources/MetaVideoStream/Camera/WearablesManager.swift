@@ -5,6 +5,7 @@ import Combine
 import MWDATCore
 import MWDATCamera
 import MWDATDisplay
+import CoreBluetooth
 
 // MARK: - WearablesManager
 
@@ -50,6 +51,7 @@ final class WearablesManager: ObservableObject {
     let ndi: NDIStreamManager
 
     private let deviceSelector: AutoDeviceSelector
+    private let bluetoothMonitor = BluetoothMonitor()
 
     // ── Background tasks ───────────────────────────────────────────────────────
     private var registrationTask: Task<Void, Never>?
@@ -91,6 +93,14 @@ final class WearablesManager: ObservableObject {
     private var ndiFrameCount: Int = 0
     private var lastLogDate: Date = Date()
 
+    // MARK: - Debug Logger
+    private func logDebug(_ message: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        let timestamp = formatter.string(from: Date())
+        print("🔍 [DEBUG] [\(timestamp)] \(message)")
+    }
+
     // MARK: - Init / deinit
 
     init() {
@@ -120,11 +130,22 @@ final class WearablesManager: ObservableObject {
     // MARK: - Public API
 
     func connect() async {
-        guard appState.allowsConnect else { return }
+        logDebug("Connect button clicked. Current appState: \(appState)")
+        guard appState.allowsConnect else {
+            logDebug("Connect not allowed in current appState.")
+            return
+        }
+        
+        logDebug("Awaiting Bluetooth central manager power status...")
+        await bluetoothMonitor.waitUntilPoweredOn()
+        logDebug("Bluetooth Central Manager powered on.")
+        
+        logDebug("Checking registration status (isRegistered: \(isRegistered))")
         if isRegistered {
-            await startStream()
+            await startDeviceSession()
         } else {
-            await registerThenStream()
+            logDebug("Device is not registered. Initiating registration flow...")
+            await registerThenConnect()
         }
     }
 
@@ -164,19 +185,24 @@ final class WearablesManager: ObservableObject {
 
     // MARK: - Registration
 
-    private func registerThenStream() async {
+    private func registerThenConnect() async {
+        logDebug("registerThenConnect() invoked. Changing state to .registering")
         appState = .registering
         do {
+            logDebug("Calling wearables.startRegistration()...")
             try await wearables.startRegistration()
+            logDebug("wearables.startRegistration() completed. Waiting for registration...")
             try await waitForRegistration()
-            await startStream()
+            logDebug("waitForRegistration() completed. Starting device session...")
+            await startDeviceSession()
         } catch {
+            logDebug("Error caught in registerThenConnect(): \(error.localizedDescription)")
             appState = .error("Registration failed: \(error.localizedDescription)")
         }
     }
 
     private func waitForRegistration() async throws {
-        let deadline = Date().addingTimeInterval(10)
+        let deadline = Date().addingTimeInterval(60) // 60 seconds to allow user to complete Meta AI app registration
         while !isRegistered, Date() < deadline {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
@@ -201,22 +227,80 @@ final class WearablesManager: ObservableObject {
         }
     }
 
-    // MARK: - Stream flow
+    // MARK: - Session & Features flow
 
-    private func startStream() async {
+    private func startDeviceSession() async {
+        logDebug("startDeviceSession() invoked. Changing state to .awaitingPermission")
         appState = .awaitingPermission
         do {
+            logDebug("Checking and ensuring camera permission...")
             try await ensureCameraPermission()
-            appState = .connecting(streamName: "NDI")
+            logDebug("Camera permission checked/granted.")
 
+            logDebug("Creating session using deviceSelector...")
             let session = try wearables.createSession(deviceSelector: deviceSelector)
             deviceSession = session
             let stateStream = session.stateStream()
+            
+            logDebug("Starting session...")
             try session.start()
+            logDebug("Session start command completed. Awaiting stateStream .started...")
 
             for await sessionState in stateStream {
-                if sessionState == .started { break }
-                if sessionState == .stopped { throw WearablesError.sessionFailed }
+                logDebug("stateStream received sessionState: \(sessionState)")
+                if sessionState == .started {
+                    logDebug("Session successfully reached .started state.")
+                    break
+                }
+                if sessionState == .stopped {
+                    logDebug("Session reached unexpected state: .stopped")
+                    throw WearablesError.sessionFailed
+                }
+            }
+
+            logDebug("Attaching display capability to session...")
+            let displayCap = try session.addDisplay()
+            
+            logDebug("Starting display capability...")
+            await displayCap.start()
+            self.display = displayCap
+            logDebug("Display capability start command finished. Awaiting displayCap.state to become .started...")
+
+            // Wait for display state to become .started
+            var count = 0
+            while displayCap.state != .started && count < 50 {
+                logDebug("Waiting for display... Attempt \(count + 1)/50. Current displayCap.state: \(displayCap.state)")
+                try await Task.sleep(nanoseconds: 100_000_000)
+                count += 1
+            }
+
+            logDebug("Finished waiting. Final displayCap.state: \(displayCap.state)")
+            if displayCap.state == .started {
+                logDebug("Display capability successfully reached .started. Sending ConnectedStandbyView...")
+                await sendConnectedStandbyView()
+                logDebug("ConnectedStandbyView sent. Setting appState to .connected.")
+                appState = .connected
+            } else {
+                logDebug("Display capability failed to start. Current displayCap.state is \(displayCap.state)")
+                throw NSError(
+                    domain: "WearablesManager",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Display capability failed to start. State: \(displayCap.state)"]
+                )
+            }
+        } catch {
+            logDebug("Error caught in startDeviceSession(): \(error.localizedDescription) (Raw: \(error))")
+            appState = .error(error.localizedDescription)
+            await teardown(nextState: appState)
+        }
+    }
+
+    func startStreaming() async {
+        guard appState == .connected else { return }
+        appState = .connecting(streamName: "NDI")
+        do {
+            guard let session = deviceSession else {
+                throw NSError(domain: "WearablesManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No active device session."])
             }
 
             let config = StreamConfiguration(videoCodec: .raw, resolution: .low, frameRate: 30)
@@ -259,21 +343,80 @@ final class WearablesManager: ObservableObject {
             await stream.start()
             ndi.start()
             startFrameStallMonitor()
-
-            // Start Display capability if supported
-            do {
-                let displayCap = try session.addDisplay()
-                await displayCap.start()
-                self.display = displayCap
-                print("📺 [Wearables] Display capability started successfully.")
-            } catch {
-                print("⚠️ [Wearables] Display capability not available: \(error.localizedDescription)")
-            }
-
         } catch {
             appState = .error(error.localizedDescription)
             await teardown(nextState: appState)
         }
+    }
+
+    func stopStreaming() async {
+        switch appState {
+        case .streaming, .connecting:
+            break
+        default:
+            return
+        }
+        
+        frameStallTask?.cancel()
+        frameStallTask = nil
+
+        if let stream = streamSession { await stream.stop() }
+        stateToken = nil
+        frameToken = nil
+        streamSession = nil
+        currentFrame = nil
+        lastFrameDate = nil
+        ndi.stop()
+
+        await sendConnectedStandbyView()
+        appState = .connected
+    }
+
+    func startWatchingVideo(url: String) async {
+        guard appState == .connected else { return }
+        appState = .watchingVideo
+        do {
+            guard let displayCap = display else {
+                throw NSError(domain: "WearablesManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Display capability not active."])
+            }
+
+            // 1. Send loading/wake view to the glasses screen to make sure it wakes up
+            let loadingView = FlexBox(direction: .column, spacing: 16, alignment: .center, crossAlignment: .center, padding: EdgeInsets(all: 16)) {
+                Icon(name: .videoCamera, style: .filled)
+                Text("Starting Video...", style: .body)
+            }
+            try? await displayCap.send(loadingView)
+
+            // 2. Wait 300ms for screen to wake up and process visual layout
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            // 3. Send video player
+            print("📺 [Wearables] Sending video player layout to glasses...")
+            let videoPlayer = VideoPlayer(provider: .uri(url), codec: .mp4)
+            try await displayCap.send(videoPlayer)
+        } catch {
+            appState = .error("Failed to start video: \(error.localizedDescription)")
+            await teardown(nextState: appState)
+        }
+    }
+
+    func stopWatchingVideo() async {
+        guard case .watchingVideo = appState else { return }
+        if let displayCap = display {
+            await displayCap.sendVideoStop()
+            await sendConnectedStandbyView()
+        }
+        appState = .connected
+    }
+
+    private func sendConnectedStandbyView() async {
+        guard let display = display, display.state == .started else { return }
+        let view = FlexBox(direction: .column, spacing: 16, alignment: .center, crossAlignment: .center, padding: EdgeInsets(all: 16)) {
+            Icon(name: .smartGlasses, style: .filled)
+            Text("Connected", style: .heading)
+            Text("Select a mode on your phone", style: .body, color: .secondary)
+        }
+        try? await display.send(view)
     }
 
     // MARK: - NDI observation
@@ -477,5 +620,44 @@ enum WearablesError: LocalizedError {
         case .streamCreationFailed: return "Could not create a camera stream."
         case .registrationTimedOut: return "Registration timed out. Make sure the Meta AI app is installed."
         }
+    }
+}
+
+// MARK: - Bluetooth Monitor
+
+@MainActor
+final class BluetoothMonitor: NSObject, CBCentralManagerDelegate {
+    private var centralManager: CBCentralManager?
+    
+    override init() {
+        super.init()
+        self.centralManager = CBCentralManager(
+            delegate: self,
+            queue: nil,
+            options: [CBCentralManagerOptionShowPowerAlertKey: false]
+        )
+    }
+    
+    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        // Required protocol method. The state is updated on CB's internal queue
+        // and KVO-observed, so we can poll the central manager's state.
+    }
+    
+    func waitUntilPoweredOn() async {
+        guard let manager = centralManager else { return }
+        if manager.state == .poweredOn { return }
+        if manager.state == .poweredOff || manager.state == .unauthorized || manager.state == .unsupported {
+            return
+        }
+        
+        // Wait up to 2 seconds (20 iterations * 100ms) for CoreBluetooth to power on
+        for _ in 0..<20 {
+            if manager.state == .poweredOn {
+                print("🔵 [CoreBluetooth] Central Manager is powered on and ready.")
+                return
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        print("⚠️ [CoreBluetooth] Timed out waiting for powered on state. Current state: \(manager.state.rawValue)")
     }
 }

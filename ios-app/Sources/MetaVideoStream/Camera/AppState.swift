@@ -20,6 +20,7 @@ enum AppState: Equatable {
     case idle
     case registering
     case awaitingPermission
+    case connected
     case connecting(streamName: String)
     case streaming(streamName: String)
     /// NDI paused due to `.critical` thermal state. Glasses session stays alive.
@@ -29,6 +30,7 @@ enum AppState: Equatable {
     case reconnecting(attempt: Int, streamName: String)
     case error(String)
     case stopped
+    case watchingVideo
 
     // MARK: - Display
 
@@ -37,12 +39,14 @@ enum AppState: Equatable {
         case .idle:                          return "Not connected"
         case .registering:                   return "Registering…"
         case .awaitingPermission:            return "Awaiting permission…"
+        case .connected:                     return "Connected — Choose Mode"
         case .connecting:                    return "Starting NDI…"
         case .streaming:                     return "Live"
         case .paused:                        return "Paused — Overheating"
         case .reconnecting(let n, _):        return "Reconnecting (\(n))…"
         case .error:                         return "Error"
         case .stopped:                       return "Stopped"
+        case .watchingVideo:                 return "Watching Video"
         }
     }
 
@@ -51,6 +55,8 @@ enum AppState: Equatable {
         case .idle:                          return .gray
         case .registering, .awaitingPermission, .connecting, .reconnecting:
                                              return .orange
+        case .connected:                     return .blue
+        case .watchingVideo:                 return .purple
         case .streaming:                     return .green
         case .paused:                        return .orange
         case .error:                         return .red
@@ -71,8 +77,8 @@ enum AppState: Equatable {
     /// The Disconnect button should be enabled in these states.
     var allowsDisconnect: Bool {
         switch self {
-        case .connecting, .streaming, .reconnecting: return true
-        default:                                      return false
+        case .connected, .connecting, .streaming, .reconnecting, .watchingVideo: return true
+        default:                                                                  return false
         }
     }
 

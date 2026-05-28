@@ -87,6 +87,8 @@ struct ContentView: View {
         .onChange(of: wearables.appState) { newValue in
             if case .streaming = newValue {
                 // Keep state
+            } else if newValue == .watchingVideo {
+                isPlayingVideoOnGlasses = true
             } else {
                 isPlayingVideoOnGlasses = false
                 videoError = nil
@@ -176,15 +178,17 @@ struct ContentView: View {
     private var placeholderMessage: String {
         switch wearables.appState {
         case .idle:
-            return "Tap Connect to start the NDI stream over USB."
+            return "Tap Connect to establish a session with the glasses."
         case .registering:
             return "Opening Meta AI app to complete registration…"
         case .awaitingPermission:
-            return "Waiting for camera permission from the Meta AI app…"
+            return "Connecting to glasses…"
+        case .connected:
+            return "Glasses connected. Choose a mode below to begin."
         case .connecting(let name):
             return "Starting NDI: \(name)…"
         case .streaming:
-            return "Starting stream…"
+            return "Camera video stream is active."
         case .paused:
             return "Stream paused due to overheating. Tap Resume when ready."
         case .reconnecting(let n, _):
@@ -192,7 +196,9 @@ struct ContentView: View {
         case .error(let msg):
             return msg
         case .stopped:
-            return "Stream stopped. Tap Connect to start again."
+            return "Session stopped. Tap Connect to start again."
+        case .watchingVideo:
+            return "Playing video on glasses display."
         }
     }
 
@@ -218,40 +224,69 @@ struct ContentView: View {
                 }
             }
 
-            // ── SRT URL field (editable when idle/stopped, read-only when active) ──
+            // ── Status info row ──
             srtURLRow
 
-            // ── Main action button(s) ──────────────────────────────────────
-            actionButton
+            // ── Mode Selection (when connected) ─────────────────────────────
+            if wearables.appState == .connected {
+                VStack(spacing: 12) {
+                    Button {
+                        Task { await wearables.startStreaming() }
+                    } label: {
+                        Label("Stream Camera Video (NDI)", systemImage: "video.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
 
-            // ── Watch Video on Glasses Button ──────────────────────────────
-            if case .streaming = wearables.appState {
-                VStack(spacing: 8) {
                     Button {
                         Task {
-                            do {
-                                videoError = nil
-                                isPlayingVideoOnGlasses = true
-                                try await wearables.playVideoOnGlasses(
-                                    url: "https://github.com/facebook/meta-wearables-dat-android/raw/refs/heads/assets/video_266x150_faststart.mp4"
-                                )
-                            } catch {
-                                videoError = error.localizedDescription
-                                isPlayingVideoOnGlasses = false
-                            }
+                            videoError = nil
+                            await wearables.startWatchingVideo(
+                                url: "https://github.com/facebook/meta-wearables-dat-android/raw/refs/heads/assets/video_266x150_faststart.mp4"
+                            )
                         }
                     } label: {
-                        Label(
-                            isPlayingVideoOnGlasses ? "Video Streaming to Glasses" : "Watch Video on Glasses Screen",
-                            systemImage: "play.tv"
-                        )
+                        Label("Watch Video on Glasses", systemImage: "play.tv.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                }
+                .padding(.vertical, 8)
+            }
+
+            // ── Active Stream Controls ──────────────────────────────────────
+            if case .streaming = wearables.appState {
+                Button {
+                    Task { await wearables.stopStreaming() }
+                } label: {
+                    Label("Stop Streaming", systemImage: "video.slash.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 12)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+            }
+
+            // ── Active Video Controls ───────────────────────────────────────
+            if wearables.appState == .watchingVideo {
+                VStack(spacing: 8) {
+                    Button {
+                        Task { await wearables.stopWatchingVideo() }
+                    } label: {
+                        Label("Stop Video", systemImage: "stop.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                     }
                     .buttonStyle(.bordered)
-                    .tint(.green)
-                    .disabled(isPlayingVideoOnGlasses)
+                    .tint(.orange)
 
                     if let error = videoError {
                         Text(error)
@@ -259,8 +294,10 @@ struct ContentView: View {
                             .foregroundStyle(.red)
                     }
                 }
-                .padding(.top, 8)
             }
+
+            // ── Main action button (Connect / Disconnect) ────────────────────
+            actionButton
         }
     }
 
@@ -279,6 +316,11 @@ struct ContentView: View {
                     .truncationMode(.middle)
                 Spacer()
             }
+        } else if wearables.appState == .connected || wearables.appState == .watchingVideo {
+            Text("USB Connection Active")
+                .font(.caption.monospaced())
+                .foregroundStyle(.green.opacity(0.7))
+                .padding(.vertical, 8)
         } else {
             // Editable when idle / stopped / error
             // NDI is automatic over USB
